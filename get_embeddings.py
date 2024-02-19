@@ -161,8 +161,8 @@ def main(data_file, index_file, pert=None):
     df = pd.read_csv(data_file, delimiter="\t")
 
     for i in range(0, 13):
-        out_file = "./outputs/predictions_layer_" + str(i) + "_base.tsv"
-        out_file1 = "./outputs/classification_report_layer" + str(i) + "_base.txt"
+        out_file = "./outputs/predictions_layer_" + str(i) + "_base_lt.tsv"
+        out_file1 = "./outputs/classification_report_layer" + str(i) + "_base_lt.txt"
         columns = list(df.columns) + ["Pred"]
         new_df = pd.DataFrame(columns=columns)
         trainX, train_y, test_X, test_y = make_train_test_set(df, model, tokenizer, train_idx, test_idx, layer_num=i)
@@ -173,7 +173,7 @@ def main(data_file, index_file, pert=None):
             # print(pert_preds,file=sys.stderr)
             print(f"CLASSIFICATION REPORT PERTURBATION {j}: ORIGINAL LABEL", classification_report(pert_test_y_orig, pert_preds))
             print(f"CLASSIFICATION REPORT PERTURBATION {j}: ACTUAL (NEGATIVE) LABEL", classification_report(pert_test_y, pert_preds))
-            with open("./outputs/perturbed/classification_report_layer" + str(i) + "_perturb_" + str(j) +  ".txt", "w") as fout_pert:
+            with open("./outputs/perturbed/classification_report_layer" + str(i) + "_perturb_" + str(j) +  "_lt.txt", "w") as fout_pert:
                 print(f"CLASSIFICATION REPORT PERTURBATION {j}: ORIGINAL LABEL",
                       classification_report(pert_test_y_orig, pert_preds), file=fout_pert)
                 print(f"CLASSIFICATION REPORT PERTURBATION {j}: ACTUAL (NEGATIVE) LABEL",
@@ -191,7 +191,7 @@ def main(data_file, index_file, pert=None):
                     row["Pred"] = predd
                     p_count += 1
                     new_pert_df.loc[len(new_pert_df.index)] = row
-            out_data_name = f"pert_predictions_layer_{i}_pert_{j}.tsv"
+            out_data_name = "./outputs/perturbed/" + f"pert_predictions_layer_{i}_pert_{j}_lt.tsv"
             new_pert_df.to_csv(out_data_name, index=False, sep="\t")
 
             # columns = list(df.columns) + ["Pred"]

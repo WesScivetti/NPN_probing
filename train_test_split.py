@@ -86,7 +86,7 @@ def vanilla_split(in_file, train_size=304):
 
     y_test_size = 1977 - y_train_count
     if train_size == 304:
-        y_test_size = 76
+        y_test_size = 1977 - y_train_count
 
     y_test_count = 0
     y_test_idx = []
@@ -167,7 +167,7 @@ def vanilla_split(in_file, train_size=304):
     id_dict["N_train"] = n_train_idx
     id_dict["N_test"] = n_test_idx
 
-    with open("./data/train_test_split_train_full_Y_vsmall_Test.json", "w") as fout:
+    with open("./data/train_test_split_train_balanced_Y_big_yTest.json", "w") as fout:
         json.dump(id_dict, fout)
 
     return y_train_idx, y_test_idx, n_train_idx, n_test_idx
