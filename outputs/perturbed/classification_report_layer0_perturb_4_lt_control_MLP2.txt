@@ -1,0 +1,18 @@
+CLASSIFICATION REPORT PERTURBATION 4: ORIGINAL LABEL, CONTROL CLASSIFIER MLP2               precision    recall  f1-score   support
+
+           0       0.45      0.10      0.17       897
+           1       0.48      0.86      0.62       853
+
+    accuracy                           0.47      1750
+   macro avg       0.46      0.48      0.39      1750
+weighted avg       0.46      0.47      0.39      1750
+
+CLASSIFICATION REPORT PERTURBATION 4: ACTUAL (NEGATIVE) LABEL, CONTROL CLASSIFIER MLP2               precision    recall  f1-score   support
+
+           0       1.00      0.12      0.21      1750
+           1       0.00      0.00      0.00         0
+
+    accuracy                           0.12      1750
+   macro avg       0.50      0.06      0.11      1750
+weighted avg       1.00      0.12      0.21      1750
+
