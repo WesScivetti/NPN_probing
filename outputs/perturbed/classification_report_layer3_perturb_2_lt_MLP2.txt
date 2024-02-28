@@ -1,0 +1,18 @@
+CLASSIFICATION REPORT PERTURBATION 2: ORIGINAL LABEL               precision    recall  f1-score   support
+
+           0       0.09      0.92      0.17        76
+           1       0.99      0.59      0.74      1674
+
+    accuracy                           0.60      1750
+   macro avg       0.54      0.75      0.45      1750
+weighted avg       0.95      0.60      0.71      1750
+
+CLASSIFICATION REPORT PERTURBATION 2: ACTUAL (NEGATIVE) LABEL               precision    recall  f1-score   support
+
+           0       1.00      0.43      0.61      1750
+           1       0.00      0.00      0.00         0
+
+    accuracy                           0.43      1750
+   macro avg       0.50      0.22      0.30      1750
+weighted avg       1.00      0.43      0.61      1750
+

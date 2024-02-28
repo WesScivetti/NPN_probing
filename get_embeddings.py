@@ -269,7 +269,7 @@ def main(data_file, index_file, pert=None):
 
         clf_dict = {}
         clf_control_dict = {}
-        for clf_type in ["LR"]: #add in MLPs later
+        for clf_type in ["MLP1", "MLP2"]: #add in MLPs later
             out_file = "./outputs/predictions_layer_" + str(i) + f"_base_lt_{clf_type}.tsv"
             out_file1 = "./outputs/classification_report_layer" + str(i) + f"_base_lt_{clf_type}.txt"
             out_file_control = "./outputs/classification_report_layer" + str(i) + f"_base_lt_control_{clf_type}.txt"
@@ -305,7 +305,7 @@ def main(data_file, index_file, pert=None):
             pert_test_X_control, pert_test_y_control, pert_test_y_orig_control = make_pert_test_data(test_idx, model, tokenizer, pert=j, control=True)
 
 
-            for clf_type in ["LR"]: #add in MLPs later
+            for clf_type in ["MLP1", "MLP2"]: #add in MLPs later
                 clf = clf_dict[clf_type]
                 control_clf = clf_control_dict[clf_type]
                 pert_preds = list(clf.predict(pert_test_X))
