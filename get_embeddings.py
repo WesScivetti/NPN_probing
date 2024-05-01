@@ -22,6 +22,7 @@ def get_tokenized_input(row, tokenizer, pert=0):
     pert = row["Perturbation"]
     noun = row["N1"]
 
+
     if pert == 0:
         pattern = noun.lower() + " to " + noun.lower()
         repl_pattern = noun.lower() + " [UNK] " + noun.lower()
@@ -70,7 +71,7 @@ def get_embeddings(model, tokenized_text, target_id):
 
     return embeddings_list
 
-def get_control_label_set(df, idx_set):
+def get_control_label_set(df, idx_set, semantic=False):
     """
     given the dataframe, returns a dictionary with the majority label for each N1 lemma.
     used for shuffling labels for the control classifier.
@@ -81,7 +82,20 @@ def get_control_label_set(df, idx_set):
             row = df.loc[r]
             noun = row["N1"].lower()
             text = row["Sentence Raw Text"]
-            label = 1 if row["Orig Label"] == "Y" else 0
+
+            if not semantic:
+                label = 1 if row["Orig Label"] == "Y" else 0
+
+            if semantic:
+                label2id = {"F": 0, "B": 1, "I": 2, "J": 3}
+                id2label = {0: "F", 1: "B", "I": 2, "J": 3}
+
+                raw_sem = row["Subtype"]
+
+                sem = raw_sem if pd.notna(raw_sem) else 'N/A'
+
+                label = label2id[sem]
+
             noun_labels[noun].append(label)
 
     majority_labels = {}
@@ -94,7 +108,7 @@ def get_control_label_set(df, idx_set):
     return majority_labels
 
 
-def shuffle_labels(majority_labels):
+def shuffle_labels(majority_labels, semantic=False):
     """
     takes the dictionary of majority labels and shuffles them to return the new control labels
     """
@@ -108,6 +122,9 @@ def shuffle_labels(majority_labels):
     #Bias a bit toward the positive for lemmas to get closer to a balanced dataset
     random.seed(42)
     choices = [0, 1]
+    if semantic:
+        choices = [0, 1, 2, 3]
+
     labels = [random.choice(choices) for i in range(len(labels))]
     print("Counter (new)", Counter(labels))
     shuffled_labels = {}
@@ -119,11 +136,14 @@ def shuffle_labels(majority_labels):
 
     return shuffled_labels
 
-def make_train_test_set(df, model, tokenizer, train_idx, test_idx, layer_num=6, control=False):
+def make_train_test_set(df, model, tokenizer, train_idx, test_idx, layer_num=6, control=False, semantic=False):
     """
     makes train test split with embeddings, also can create control datasets for control classifiers
     """
     print(f"making the train/test sets for layer {layer_num}", file=sys.stderr)
+    if semantic:
+        print("SEMANTIC VERSION", file=sys.stderr)
+
     if control==True:
         print("This is the control dataset", file=sys.stderr)
     print("---------------------------", file=sys.stderr)
@@ -133,18 +153,31 @@ def make_train_test_set(df, model, tokenizer, train_idx, test_idx, layer_num=6, 
     test_y = []
 
     if control == True:
-        majority_labels_train = get_control_label_set(df, train_idx)
-        majority_labels_test = get_control_label_set(df, test_idx)
-        shuffed_labels_train = shuffle_labels(majority_labels_train)
-        shuffed_labels_test = shuffle_labels(majority_labels_test)
+        majority_labels_train = get_control_label_set(df, train_idx, semantic=semantic)
+        majority_labels_test = get_control_label_set(df, test_idx, semantic=semantic)
+        shuffed_labels_train = shuffle_labels(majority_labels_train, semantic=semantic)
+        shuffed_labels_test = shuffle_labels(majority_labels_test, semantic=semantic)
 
     train_labs_orig = []
     train_labs_shuff = []
     for r in df.index:
+        # print(r)
         row = df.loc[r]
+        # print(row)
         noun = row["N1"]
         text = row["Sentence Raw Text"]
-        label = 1 if row["True NPN"] == "Y" else 0
+        if not semantic:
+            label = 1 if row["True NPN"] == "Y" else 0
+        if semantic:
+            label2id = {"F": 0, "B": 1, "I": 2, "J": 3, "N/A": 4}
+            id2label = {0: "F", 1: "B", 2: "I",  3: "J", 4: "N/A"}
+
+            raw_sem = row["Subtype"]
+
+            sem = raw_sem if pd.notna(raw_sem) else 'N/A'
+
+            label = label2id[sem]
+
         tokenized_text, target_id = get_tokenized_input(row, tokenizer)
         embeddings_list = get_embeddings(model, tokenized_text, target_id)
         # print(len(embeddings_list), file=sys.stderr)
@@ -178,37 +211,65 @@ def make_train_test_set(df, model, tokenizer, train_idx, test_idx, layer_num=6, 
 
     return train_X, train_y, test_X, test_y
 
-def open_pert_df(pert):
-    if pert == 1:
-        pert_df = pd.read_csv("./data/raw_NPN_data_cleaned.tsv_perturbed_NNP.tsv", delimiter="\t")
-        pert = 1
-    if pert == 3:
-        pert_df = pd.read_csv("./data/raw_NPN_data_cleaned.tsv_perturbed_NP.tsv", delimiter="\t")
-        pert = 3
-    if pert == 4:
-        pert_df = pd.read_csv("./data/raw_NPN_data_cleaned.tsv_perturbed_PN.tsv", delimiter="\t")
-        pert = 4
-    if pert == 2:
-        pert_df = pd.read_csv("./data/raw_NPN_data_cleaned.tsv_perturbed_PNN.tsv", delimiter="\t")
-        pert = 2
+def open_pert_df(pert, semantic=False):
+    if not semantic:
+        if pert == 1:
+            pert_df = pd.read_csv("./data/raw_NPN_data_cleaned.tsv_perturbed_NNP.tsv", delimiter="\t")
+            pert = 1
+        if pert == 3:
+            pert_df = pd.read_csv("./data/raw_NPN_data_cleaned.tsv_perturbed_NP.tsv", delimiter="\t")
+            pert = 3
+        if pert == 4:
+            pert_df = pd.read_csv("./data/raw_NPN_data_cleaned.tsv_perturbed_PN.tsv", delimiter="\t")
+            pert = 4
+        if pert == 2:
+            pert_df = pd.read_csv("./data/raw_NPN_data_cleaned.tsv_perturbed_PNN.tsv", delimiter="\t")
+            pert = 2
+    else:
+        if pert == 1:
+            pert_df = pd.read_csv("./data/raw_NPN_data_cleaned_subtype_perturbed_NNP.tsv", delimiter="\t")
+            pert = 1
+        if pert == 3:
+            pert_df = pd.read_csv("./data/raw_NPN_data_cleaned_subtype_perturbed_NP.tsv", delimiter="\t")
+            pert = 3
+        if pert == 4:
+            pert_df = pd.read_csv("./data/raw_NPN_data_cleaned_subtype_perturbed_PN.tsv", delimiter="\t")
+            pert = 4
+        if pert == 2:
+            pert_df = pd.read_csv("./data/raw_NPN_data_cleaned_subtype_perturbed_PNN.tsv", delimiter="\t")
+            pert = 2
+
+        ##add in different file names here once they are made
     return pert_df
 
 
-def make_pert_test_data(test_idx, model, tokenizer, pert=1, layer_num=6, control=False):
-    pert_df = open_pert_df(pert)
+def make_pert_test_data(test_idx, model, tokenizer, pert=1, layer_num=6, control=False, semantic=False):
+    pert_df = open_pert_df(pert, semantic=semantic)
     test_X = []
     test_y = []
     test_y_orig = []
     if control == True:
-        majority_labels = get_control_label_set(pert_df, test_idx)
-        shuffed_labels_test = shuffle_labels(majority_labels)
+        majority_labels = get_control_label_set(pert_df, test_idx, semantic=semantic)
+        shuffed_labels_test = shuffle_labels(majority_labels, semantic=semantic)
 
     for r in pert_df.index:
         if r in test_idx:
             row = pert_df.loc[r].copy()
             noun = row["N1"]
-            orig_label = 1 if row["Orig Label"] == "Y" else 0
-            label = 1 if row["True NPN"] == "Y" else 0 #should always be 0 for perturbed cases
+            if not semantic:
+                orig_label = 1 if row["Orig Label"] == "Y" else 0
+                label = 1 if row["True NPN"] == "Y" else 0 #should always be 0 for perturbed cases
+            else:
+                label2id = {"F": 0, "B": 1, "I": 2, "J": 3}
+                id2label = {0: "F", 1: "B", "I": 2, "J": 3}
+
+                raw_sem = row["Subtype"]
+
+                sem = raw_sem if pd.notna(raw_sem) else 'N/A'
+
+                label = label2id[sem]
+                orig_label = label
+
             tokenized_text, target_id = get_tokenized_input(row, tokenizer, pert=pert)
             embeddings_list = get_embeddings(model, tokenized_text, target_id)
             # print(len(embeddings_list))
@@ -250,10 +311,12 @@ def load_split_indices(index_file):
     test_idx = data["N_test"] + data["Y_test"]
     return train_idx, test_idx
 
-def main(data_file, index_file, pert=None):
+def main(data_file, index_file, pert=None, semantic=False):
     """
     full pipeline
     """
+    if semantic:
+        print("SEMANTIC EXPERIMENTS", file=sys.stderr)
     train_idx, test_idx = load_split_indices(index_file)
     model = AutoModel.from_pretrained("bert-base-cased", output_hidden_states=True)
     tokenizer = AutoTokenizer.from_pretrained("bert-base-cased")
@@ -264,17 +327,27 @@ def main(data_file, index_file, pert=None):
         # out_file_control = "./outputs/classification_report_layer" + str(i) + f"_base_lt_control_{clf_type}.txt"
         # columns = list(df.columns) + ["Pred", "Control Pred", "Control Gold"]
         # new_df = pd.DataFrame(columns=columns)
-        trainX, train_y, test_X, test_y = make_train_test_set(df, model, tokenizer, train_idx, test_idx, layer_num=i)
-        trainX_control, train_y_control, test_X_control, test_y_control = make_train_test_set(df, model, tokenizer, train_idx, test_idx, layer_num=i, control=True)
+        trainX, train_y, test_X, test_y = make_train_test_set(df, model, tokenizer, train_idx, test_idx, layer_num=i, semantic=semantic)
+        trainX_control, train_y_control, test_X_control, test_y_control = make_train_test_set(df, model, tokenizer, train_idx, test_idx, layer_num=i, control=True, semantic=semantic)
 
         clf_dict = {}
         clf_control_dict = {}
-        for clf_type in ["MLP1", "MLP2"]: #add in MLPs later
-            out_file = "./outputs/predictions_layer_" + str(i) + f"_base_lt_{clf_type}.tsv"
-            out_file1 = "./outputs/classification_report_layer" + str(i) + f"_base_lt_{clf_type}.txt"
-            out_file_control = "./outputs/classification_report_layer" + str(i) + f"_base_lt_control_{clf_type}.txt"
+        for clf_type in ["LR"]: #add in MLPs later
+
+            if not semantic:
+                out_file = "./outputs/predictions_layer_" + str(i) + f"_base_lt_{clf_type}.tsv"
+                out_file1 = "./outputs/classification_report_layer" + str(i) + f"_base_lt_{clf_type}.txt"
+                out_file_control = "./outputs/classification_report_layer" + str(i) + f"_base_lt_control_{clf_type}.txt"
+
+            else:
+                out_file = "./outputs/predictions_layer_" + str(i) + f"_base_lt_{clf_type}_subtype.tsv"
+                out_file1 = "./outputs/classification_report_layer" + str(i) + f"_base_lt_{clf_type}_subtype.txt"
+                out_file_control = "./outputs/classification_report_layer" + str(i) + f"_base_lt_control_{clf_type}_subtype.txt"
+
             columns = list(df.columns) + ["Pred", "Control Pred", "Control Gold"]
             new_df = pd.DataFrame(columns=columns)
+
+
 
             preds, clf = run_model(trainX, train_y, test_X, test_y, outfile=out_file1, clf_type=clf_type)
             preds_control, control_clf = run_model(trainX_control, train_y_control, test_X_control, test_y_control, outfile=out_file_control, clf_type=clf_type)
@@ -301,11 +374,11 @@ def main(data_file, index_file, pert=None):
 
         for j in range(1, 5):
             print("working on pert datasets", file=sys.stderr)
-            pert_test_X, pert_test_y, pert_test_y_orig = make_pert_test_data(test_idx, model, tokenizer, pert=j)
-            pert_test_X_control, pert_test_y_control, pert_test_y_orig_control = make_pert_test_data(test_idx, model, tokenizer, pert=j, control=True)
+            pert_test_X, pert_test_y, pert_test_y_orig = make_pert_test_data(test_idx, model, tokenizer, pert=j, semantic=semantic)
+            pert_test_X_control, pert_test_y_control, pert_test_y_orig_control = make_pert_test_data(test_idx, model, tokenizer, pert=j, control=True, semantic=semantic)
 
 
-            for clf_type in ["MLP1", "MLP2"]: #add in MLPs later
+            for clf_type in ["LR"]: #add in MLPs later
                 clf = clf_dict[clf_type]
                 control_clf = clf_control_dict[clf_type]
                 pert_preds = list(clf.predict(pert_test_X))
@@ -314,14 +387,23 @@ def main(data_file, index_file, pert=None):
                 print(f"CLASSIFICATION REPORT PERTURBATION {j}: ORIGINAL LABEL {clf_type}", classification_report(pert_test_y_orig, pert_preds))
                 print(f"CLASSIFICATION REPORT PERTURBATION {j}: ACTUAL (NEGATIVE) LABEL {clf_type}", classification_report(pert_test_y, pert_preds))
 
+                #add classification report renamed
+                fout_pert_fname = "./outputs/perturbed/classification_report_layer" + str(i) + "_perturb_" + str(j) + f"_lt_{clf_type}.txt"
 
-                with open("./outputs/perturbed/classification_report_layer" + str(i) + "_perturb_" + str(j) +  f"_lt_{clf_type}.txt", "w") as fout_pert:
+                if semantic:
+                    fout_pert_fname = "./outputs/perturbed/classification_report_layer" + str(i) + "_perturb_" + str(j) + f"_lt_{clf_type}_subtype.txt"
+
+
+                with open(fout_pert_fname, "w") as fout_pert:
                     print(f"CLASSIFICATION REPORT PERTURBATION {j}: ORIGINAL LABEL",
                           classification_report(pert_test_y_orig, pert_preds), file=fout_pert)
                     print(f"CLASSIFICATION REPORT PERTURBATION {j}: ACTUAL (NEGATIVE) LABEL",
                           classification_report(pert_test_y, pert_preds), file=fout_pert)
 
                 f_out_pert_control_f = "./outputs/perturbed/classification_report_layer" + str(i) + "_perturb_" + str(j) + f"_lt_control_{clf_type}.txt"
+
+                if semantic:
+                    f_out_pert_control_f = "./outputs/perturbed/classification_report_layer" + str(i) + "_perturb_" + str(j) + f"_lt_control_{clf_type}_subtype.txt"
 
                 with open(f_out_pert_control_f, "w") as fout_pert_control:
                     print(f"CLASSIFICATION REPORT PERTURBATION {j}: ORIGINAL LABEL, CONTROL CLASSIFIER {clf_type}", classification_report(pert_test_y_orig_control, pert_preds_control), file=fout_pert_control)
@@ -342,7 +424,11 @@ def main(data_file, index_file, pert=None):
                         row["Control Gold"] = pert_test_y_orig_control[p_count]
                         p_count += 1
                         new_pert_df.loc[len(new_pert_df.index)] = row
+
                 out_data_name = "./outputs/perturbed/" + f"pert_predictions_layer_{i}_pert_{j}_lt_{clf_type}.tsv"
+                if semantic:
+                    out_data_name = "./outputs/perturbed/" + f"pert_predictions_layer_{i}_pert_{j}_lt_{clf_type}_subtype.tsv"
+
                 new_pert_df.to_csv(out_data_name, index=False, sep="\t")
 
             # columns = list(df.columns) + ["Pred"]
@@ -373,7 +459,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--data_file")
     parser.add_argument("-i", "--index_file")
+    parser.add_argument("-sm", "--semantic", action="store_true")
     args = parser.parse_args()
-    main(args.data_file, args.index_file)
+    main(args.data_file, args.index_file, semantic=args.semantic)
 
 
