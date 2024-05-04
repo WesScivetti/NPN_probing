@@ -1,0 +1,20 @@
+CLASSIFICATION REPORT PERTURBATION 3: ORIGINAL LABEL, CONTROL CLASSIFIER LR               precision    recall  f1-score   support
+
+           0       0.35      0.78      0.48       605
+           1       0.25      0.14      0.18       464
+           2       0.43      0.08      0.13       681
+
+    accuracy                           0.34      1750
+   macro avg       0.34      0.33      0.27      1750
+weighted avg       0.35      0.34      0.27      1750
+
+CLASSIFICATION REPORT PERTURBATION 3: ACTUAL (NEGATIVE) LABEL, CONTROL CLASSIFIER LR               precision    recall  f1-score   support
+
+           0       0.04      0.71      0.08        84
+           1       0.50      0.15      0.23       862
+           2       0.35      0.05      0.09       804
+
+    accuracy                           0.13      1750
+   macro avg       0.30      0.31      0.14      1750
+weighted avg       0.41      0.13      0.16      1750
+

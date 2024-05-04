@@ -4,8 +4,10 @@ import pandas as pd
 import json
 import re
 import torch
+import numpy as np
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import classification_report
+from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.linear_model import LogisticRegression
 import argparse
 from collections import defaultdict, Counter
@@ -87,8 +89,8 @@ def get_control_label_set(df, idx_set, semantic=False):
                 label = 1 if row["Orig Label"] == "Y" else 0
 
             if semantic:
-                label2id = {"F": 0, "B": 1, "I": 2, "J": 3}
-                id2label = {0: "F", 1: "B", "I": 2, "J": 3}
+                label2id = {"F": 0, "B": 1, "I": 1, "J": 2}
+                id2label = {0: "F", 1: "I", 2: "J"}
 
                 raw_sem = row["Subtype"]
 
@@ -123,7 +125,7 @@ def shuffle_labels(majority_labels, semantic=False):
     random.seed(42)
     choices = [0, 1]
     if semantic:
-        choices = [0, 1, 2, 3]
+        choices = [0, 1, 2]
 
     labels = [random.choice(choices) for i in range(len(labels))]
     print("Counter (new)", Counter(labels))
@@ -169,8 +171,8 @@ def make_train_test_set(df, model, tokenizer, train_idx, test_idx, layer_num=6, 
         if not semantic:
             label = 1 if row["True NPN"] == "Y" else 0
         if semantic:
-            label2id = {"F": 0, "B": 1, "I": 2, "J": 3, "N/A": 4}
-            id2label = {0: "F", 1: "B", 2: "I",  3: "J", 4: "N/A"}
+            label2id = {"F": 0, "B": 1, "I": 1, "J": 2, "N/A": 3}
+            id2label = {0: "F", 1: "I",  2: "J", 3: "N/A"}
 
             raw_sem = row["Subtype"]
 
@@ -260,8 +262,8 @@ def make_pert_test_data(test_idx, model, tokenizer, pert=1, layer_num=6, control
                 orig_label = 1 if row["Orig Label"] == "Y" else 0
                 label = 1 if row["True NPN"] == "Y" else 0 #should always be 0 for perturbed cases
             else:
-                label2id = {"F": 0, "B": 1, "I": 2, "J": 3}
-                id2label = {0: "F", 1: "B", "I": 2, "J": 3}
+                label2id = {"F": 0, "B": 1, "I": 1, "J": 2} #Iteration and Boundary are considered the same semantic subtype
+                id2label = {0: "F", 1: "I", 2: "J"}
 
                 raw_sem = row["Subtype"]
 
@@ -286,6 +288,9 @@ def make_pert_test_data(test_idx, model, tokenizer, pert=1, layer_num=6, control
 
 
 def run_model(trainX, train_y, test_X, test_y, outfile = None, clf_type="LR"):
+    """
+    Given lists of train and test embeddings and labels, run probing classifier of specified type
+    """
     print("running the model", file=sys.stderr)
     print("Classifier type:", clf_type)
     print("----------------", file=sys.stderr)
@@ -305,11 +310,87 @@ def run_model(trainX, train_y, test_X, test_y, outfile = None, clf_type="LR"):
     return preds, clf
 
 def load_split_indices(index_file):
+    """load a file containing the train and test indices and read it back into lists of indices"""
     with open(index_file) as fin:
         data = json.load(fin)
     train_idx = data["Y_train"] + data["N_train"]
     test_idx = data["N_test"] + data["Y_test"]
     return train_idx, test_idx
+
+def clustering_experiment(df, train_idx, test_idx, trainX, train_y, test_X, test_y, preds):
+    """clustering experiment to assess prototypicality"""
+    #actually need train_idx, test_idx, trainX, train_y, testX, test_y, preds
+    #
+    train_count = 0
+    embed_dict = defaultdict(list)
+
+    for r in df.index:
+        if r in train_idx:
+            embedding = trainX[train_count]
+            label = train_y[train_count]
+            embed_dict[label].append(embedding) #add embedding to list for its subtype, used for centroid calculation
+            train_count += 1
+
+    #calculate centroids for each semantic subtype
+    #label 0 = F, label 1 = I, label 2 = J
+
+    # print("embed dict", embed_dict)
+    array_0 = np.stack(embed_dict[0])
+    centroid_0 = np.mean(array_0, axis=0) #1 vector with mean value of each dimension (columns in original array)
+
+    array_1 = np.stack(embed_dict[1])
+    centroid_1 = np.mean(array_1, axis=0)
+
+    array_2 = np.stack(embed_dict[2])
+    centroid_2 = np.mean(array_2, axis=0)
+    # print(centroid_0)
+    # print(centroid_1)
+    # print(centroid_2)
+    #loop through test
+    #calculate which is the closest centroid in terms of euclidean distance
+
+    #gather sim_lists
+    #nested dictionary with list of similarities for each label
+
+    sim_dict = defaultdict(lambda: defaultdict(list))
+
+    cluster_preds = []
+
+    test_count = 0
+    for r in df.index:
+        if r in test_idx:
+            embedding = test_X[test_count]
+            gold_label = test_y[test_count]
+            pred_label = preds[test_count]
+            #calculate cosine similarity of embedding to existing clusters
+            sims = cosine_similarity([embedding], [centroid_0, centroid_1, centroid_2])
+            top_sim = np.max(sims)
+            top_cluster = np.argmax(sims)
+
+            # print(top_sim, top_cluster)
+            cluster_preds.append(top_cluster)
+
+            top_sim = float(top_sim)
+
+            gold_label_sim = float(sims[0][gold_label])  #record sim to gold label
+
+            if gold_label == pred_label:
+                sim_dict[gold_label]["C"].append(gold_label_sim)
+
+            if gold_label != pred_label:
+                sim_dict[gold_label]["I"].append(gold_label_sim)
+
+            test_count += 1
+
+
+    #print(sim_dict)
+    return cluster_preds, sim_dict
+
+
+
+
+
+
 
 def main(data_file, index_file, pert=None, semantic=False):
     """
@@ -335,14 +416,14 @@ def main(data_file, index_file, pert=None, semantic=False):
         for clf_type in ["LR"]: #add in MLPs later
 
             if not semantic:
-                out_file = "./outputs/predictions_layer_" + str(i) + f"_base_lt_{clf_type}.tsv"
-                out_file1 = "./outputs/classification_report_layer" + str(i) + f"_base_lt_{clf_type}.txt"
-                out_file_control = "./outputs/classification_report_layer" + str(i) + f"_base_lt_control_{clf_type}.txt"
+                out_file = "./outputs/predictions_layer_" + str(i) + f"_base_lt_{clf_type}2.tsv"
+                out_file1 = "./outputs/classification_report_layer" + str(i) + f"_base_lt_{clf_type}2.txt"
+                out_file_control = "./outputs/classification_report_layer" + str(i) + f"_base_lt_control_{clf_type}2.txt"
 
             else:
-                out_file = "./outputs/predictions_layer_" + str(i) + f"_base_lt_{clf_type}_subtype.tsv"
-                out_file1 = "./outputs/classification_report_layer" + str(i) + f"_base_lt_{clf_type}_subtype.txt"
-                out_file_control = "./outputs/classification_report_layer" + str(i) + f"_base_lt_control_{clf_type}_subtype.txt"
+                out_file = "./outputs/predictions_layer_" + str(i) + f"_base_lt_{clf_type}_subtype2.tsv"
+                out_file1 = "./outputs/classification_report_layer" + str(i) + f"_base_lt_{clf_type}_subtype2.txt"
+                out_file_control = "./outputs/classification_report_layer" + str(i) + f"_base_lt_control_{clf_type}_subtype2.txt"
 
             columns = list(df.columns) + ["Pred", "Control Pred", "Control Gold"]
             new_df = pd.DataFrame(columns=columns)
@@ -352,7 +433,23 @@ def main(data_file, index_file, pert=None, semantic=False):
             preds, clf = run_model(trainX, train_y, test_X, test_y, outfile=out_file1, clf_type=clf_type)
             preds_control, control_clf = run_model(trainX_control, train_y_control, test_X_control, test_y_control, outfile=out_file_control, clf_type=clf_type)
 
-            #store models for perturbed usage
+            #if clustering, do clustering experiment
+            cluster_preds, sim_dict = clustering_experiment(df, train_idx, test_idx, trainX, train_y, test_X, test_y, preds)
+            fout_clust_fname = "./outputs/clustering_sims_layer" + str(i) + f"_lt_{clf_type}.json"
+            fout_clust_report_fname = "./outputs/clustering_report_layer" + str(i) + f"_lt_{clf_type}.txt"
+
+            #print results of clustering as classifications to a file
+            with open(fout_clust_report_fname, "w") as fout_clust_report:
+                print(f"CLASSIFICATION REPORT CLUSTERING {i}: {clf_type}",
+                      classification_report(test_y, cluster_preds))
+                print(f"CLASSIFICATION REPORT CLUSTERING {i}: {clf_type}",
+                      classification_report(test_y, cluster_preds), file=fout_clust_report)
+
+            #print clustering results to json
+            with open(fout_clust_fname, 'w') as cluster_sim_file:
+                json.dump(sim_dict, cluster_sim_file, indent=4)
+
+                #store models for perturbed usage
             clf_dict[clf_type] = clf
             clf_control_dict[clf_type] = control_clf
 
@@ -372,64 +469,64 @@ def main(data_file, index_file, pert=None, semantic=False):
             new_df.to_csv(out_file, sep="\t", index=False)
 
 
-        for j in range(1, 5):
-            print("working on pert datasets", file=sys.stderr)
-            pert_test_X, pert_test_y, pert_test_y_orig = make_pert_test_data(test_idx, model, tokenizer, pert=j, semantic=semantic)
-            pert_test_X_control, pert_test_y_control, pert_test_y_orig_control = make_pert_test_data(test_idx, model, tokenizer, pert=j, control=True, semantic=semantic)
-
-
-            for clf_type in ["LR"]: #add in MLPs later
-                clf = clf_dict[clf_type]
-                control_clf = clf_control_dict[clf_type]
-                pert_preds = list(clf.predict(pert_test_X))
-                pert_preds_control = list(control_clf.predict(pert_test_X_control))
-                # print(pert_preds,file=sys.stderr)
-                print(f"CLASSIFICATION REPORT PERTURBATION {j}: ORIGINAL LABEL {clf_type}", classification_report(pert_test_y_orig, pert_preds))
-                print(f"CLASSIFICATION REPORT PERTURBATION {j}: ACTUAL (NEGATIVE) LABEL {clf_type}", classification_report(pert_test_y, pert_preds))
-
-                #add classification report renamed
-                fout_pert_fname = "./outputs/perturbed/classification_report_layer" + str(i) + "_perturb_" + str(j) + f"_lt_{clf_type}.txt"
-
-                if semantic:
-                    fout_pert_fname = "./outputs/perturbed/classification_report_layer" + str(i) + "_perturb_" + str(j) + f"_lt_{clf_type}_subtype.txt"
-
-
-                with open(fout_pert_fname, "w") as fout_pert:
-                    print(f"CLASSIFICATION REPORT PERTURBATION {j}: ORIGINAL LABEL",
-                          classification_report(pert_test_y_orig, pert_preds), file=fout_pert)
-                    print(f"CLASSIFICATION REPORT PERTURBATION {j}: ACTUAL (NEGATIVE) LABEL",
-                          classification_report(pert_test_y, pert_preds), file=fout_pert)
-
-                f_out_pert_control_f = "./outputs/perturbed/classification_report_layer" + str(i) + "_perturb_" + str(j) + f"_lt_control_{clf_type}.txt"
-
-                if semantic:
-                    f_out_pert_control_f = "./outputs/perturbed/classification_report_layer" + str(i) + "_perturb_" + str(j) + f"_lt_control_{clf_type}_subtype.txt"
-
-                with open(f_out_pert_control_f, "w") as fout_pert_control:
-                    print(f"CLASSIFICATION REPORT PERTURBATION {j}: ORIGINAL LABEL, CONTROL CLASSIFIER {clf_type}", classification_report(pert_test_y_orig_control, pert_preds_control), file=fout_pert_control)
-                    print(f"CLASSIFICATION REPORT PERTURBATION {j}: ACTUAL (NEGATIVE) LABEL, CONTROL CLASSIFIER {clf_type}", classification_report(pert_test_y_control, pert_preds_control), file=fout_pert_control)
-
-                pert_df = open_pert_df(j)
-                new_pert_df = pd.DataFrame(columns=columns)
-                p_count = 0
-                # print(p_count, file=sys.stderr)
-                # print("PREDS:  ", pert_preds, len(pert_preds), pert_preds[0], file=sys.stderr)
-                for r  in pert_df.index:
-                    if r  in test_idx:
-                        row = pert_df.loc[r].copy()
-                        # print("WTF", p_count, pert_preds[0])
-                        predd = pert_preds[p_count]
-                        row["Pred"] = predd
-                        row["Control Pred"] = pert_preds_control[p_count]
-                        row["Control Gold"] = pert_test_y_orig_control[p_count]
-                        p_count += 1
-                        new_pert_df.loc[len(new_pert_df.index)] = row
-
-                out_data_name = "./outputs/perturbed/" + f"pert_predictions_layer_{i}_pert_{j}_lt_{clf_type}.tsv"
-                if semantic:
-                    out_data_name = "./outputs/perturbed/" + f"pert_predictions_layer_{i}_pert_{j}_lt_{clf_type}_subtype.tsv"
-
-                new_pert_df.to_csv(out_data_name, index=False, sep="\t")
+        # for j in range(1, 5):
+        #     print("working on pert datasets", file=sys.stderr)
+        #     pert_test_X, pert_test_y, pert_test_y_orig = make_pert_test_data(test_idx, model, tokenizer, pert=j, semantic=semantic)
+        #     pert_test_X_control, pert_test_y_control, pert_test_y_orig_control = make_pert_test_data(test_idx, model, tokenizer, pert=j, control=True, semantic=semantic)
+        #
+        #
+        #     for clf_type in ["LR"]: #add in MLPs later
+        #         clf = clf_dict[clf_type]
+        #         control_clf = clf_control_dict[clf_type]
+        #         pert_preds = list(clf.predict(pert_test_X))
+        #         pert_preds_control = list(control_clf.predict(pert_test_X_control))
+        #         # print(pert_preds,file=sys.stderr)
+        #         print(f"CLASSIFICATION REPORT PERTURBATION {j}: ORIGINAL LABEL {clf_type}", classification_report(pert_test_y_orig, pert_preds))
+        #         print(f"CLASSIFICATION REPORT PERTURBATION {j}: ACTUAL (NEGATIVE) LABEL {clf_type}", classification_report(pert_test_y, pert_preds))
+        #
+        #         #add classification report renamed
+        #         fout_pert_fname = "./outputs/perturbed/classification_report_layer" + str(i) + "_perturb_" + str(j) + f"_lt_{clf_type}2.txt"
+        #
+        #         if semantic:
+        #             fout_pert_fname = "./outputs/perturbed/classification_report_layer" + str(i) + "_perturb_" + str(j) + f"_lt_{clf_type}_subtype2.txt"
+        #
+        #
+        #         with open(fout_pert_fname, "w") as fout_pert:
+        #             print(f"CLASSIFICATION REPORT PERTURBATION {j}: ORIGINAL LABEL",
+        #                   classification_report(pert_test_y_orig, pert_preds), file=fout_pert)
+        #             print(f"CLASSIFICATION REPORT PERTURBATION {j}: ACTUAL (NEGATIVE) LABEL",
+        #                   classification_report(pert_test_y, pert_preds), file=fout_pert)
+        #
+        #         f_out_pert_control_f = "./outputs/perturbed/classification_report_layer" + str(i) + "_perturb_" + str(j) + f"_lt_control_{clf_type}2.txt"
+        #
+        #         if semantic:
+        #             f_out_pert_control_f = "./outputs/perturbed/classification_report_layer" + str(i) + "_perturb_" + str(j) + f"_lt_control_{clf_type}_subtype2.txt"
+        #
+        #         with open(f_out_pert_control_f, "w") as fout_pert_control:
+        #             print(f"CLASSIFICATION REPORT PERTURBATION {j}: ORIGINAL LABEL, CONTROL CLASSIFIER {clf_type}", classification_report(pert_test_y_orig_control, pert_preds_control), file=fout_pert_control)
+        #             print(f"CLASSIFICATION REPORT PERTURBATION {j}: ACTUAL (NEGATIVE) LABEL, CONTROL CLASSIFIER {clf_type}", classification_report(pert_test_y_control, pert_preds_control), file=fout_pert_control)
+        #
+        #         pert_df = open_pert_df(j)
+        #         new_pert_df = pd.DataFrame(columns=columns)
+        #         p_count = 0
+        #         # print(p_count, file=sys.stderr)
+        #         # print("PREDS:  ", pert_preds, len(pert_preds), pert_preds[0], file=sys.stderr)
+        #         for r  in pert_df.index:
+        #             if r  in test_idx:
+        #                 row = pert_df.loc[r].copy()
+        #                 # print("WTF", p_count, pert_preds[0])
+        #                 predd = pert_preds[p_count]
+        #                 row["Pred"] = predd
+        #                 row["Control Pred"] = pert_preds_control[p_count]
+        #                 row["Control Gold"] = pert_test_y_orig_control[p_count]
+        #                 p_count += 1
+        #                 new_pert_df.loc[len(new_pert_df.index)] = row
+        #
+        #         out_data_name = "./outputs/perturbed/" + f"pert_predictions_layer_{i}_pert_{j}_lt_{clf_type}2.tsv"
+        #         if semantic:
+        #             out_data_name = "./outputs/perturbed/" + f"pert_predictions_layer_{i}_pert_{j}_lt_{clf_type}_subtype2.tsv"
+        #
+        #         new_pert_df.to_csv(out_data_name, index=False, sep="\t")
 
             # columns = list(df.columns) + ["Pred"]
             # new_pert_df = pd.DataFrame(columns=columns)
