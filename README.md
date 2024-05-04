@@ -12,4 +12,4 @@ raw_NPN_data_cleaned_subtype.tsv is the main data for the ML final project. Othe
 
 # Outputs folder
 
-for the ML final, the main output files are NPN results_clustering.csv, NPNresults_semantic.csv, and the clustering_sims.json files. These are used for outputting the visualizations. Full classification reports, as well as full test outputs alongside the datasets, are all logged in this folder for future error analysis. The "perturbed" subdirectory isn't relevant to this project.
+for the ML final, the main output files are NPN results_clustering.csv, NPNresults_semantic.csv, and the clustering_sims.json files. These are used for outputting the visualizations. Full classification reports, as well as full test outputs alongside the datasets, are all logged in this folder for future error analysis. The "perturbed" subdirectory isn't relevant to this project .
