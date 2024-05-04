@@ -8,7 +8,7 @@ The main script for these experiments is the get_embeddings.py script. The other
 python3 get_embeddings.py -d ./data/raw_NPN_data_cleaned_subtype.tsv -i ./data/train_test_split_train_balanced_Y.json --semantic
 
 # Data folder
-subtype_annotation.tsv is the main data for the ML final project. Other data files were used for QP1 but aren't needed for this project.
+raw_NPN_data_cleaned_subtype.tsv is the main data for the ML final project. Other data files were used for QP1 but aren't needed for this project.
 
 # Outputs folder
 
