@@ -1,0 +1,10 @@
+CLASSIFICATION REPORT CLUSTERING GloVe: LR               precision    recall  f1-score   support
+
+           0       0.15      0.47      0.23        72
+           1       0.86      0.67      0.75       731
+           2       0.77      0.78      0.77       678
+
+    accuracy                           0.71      1481
+   macro avg       0.59      0.64      0.58      1481
+weighted avg       0.78      0.71      0.74      1481
+

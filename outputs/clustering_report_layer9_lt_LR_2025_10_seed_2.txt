@@ -1,0 +1,10 @@
+CLASSIFICATION REPORT CLUSTERING 9: LR               precision    recall  f1-score   support
+
+           0       0.56      0.83      0.67        72
+           1       0.84      0.66      0.74       731
+           2       0.71      0.84      0.77       678
+
+    accuracy                           0.75      1481
+   macro avg       0.70      0.78      0.73      1481
+weighted avg       0.77      0.75      0.75      1481
+
