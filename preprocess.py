@@ -14,7 +14,7 @@ def clean_data(data_file, output_file):
     clean_df = pd.DataFrame(columns=columns)
     for r in raw_df.index:
         row = raw_df.loc[r].copy() #copy row
-        label = row["True NPN"]
+        label = row["Subtype"]
         noun = row["N1"]
         text = row["Sentence Raw Text"]
         row["Perturbation"] = 0
@@ -48,7 +48,7 @@ def perturb_data(cleaned_data_file: str, out_file: str, repl_strat = "NNP"):
         # print(row)
         text = row["Sentence Raw Text"]
         noun = row["N1"]
-        label = row["True NPN"]
+        label = row["Subtype"]
         pattern = noun.lower() + " to " + noun.lower()
         # print(pattern)
         matcher = re.compile(pattern, flags=re.IGNORECASE)
