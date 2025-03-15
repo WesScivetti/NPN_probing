@@ -203,9 +203,10 @@ def make_train_test_set(df, model, tokenizer, train_idx, test_idx, layer_num=6, 
 
         tokenized_text, target_id = get_tokenized_input(row, tokenizer)
 
-        embeddings_list = get_embeddings(model, tokenized_text, target_id)
-        # print(len(embeddings_list), file=sys.stderr)
-        current_embedding = embeddings_list
+        if not glove:
+            embeddings_list = get_embeddings(model, tokenized_text, target_id)
+            # # print(len(embeddings_list), file=sys.stderr)
+            current_embedding = embeddings_list
         # print(len(current_embedding))
 
         if glove:
