@@ -16,7 +16,7 @@ from sklearn.neural_network import MLPClassifier
 
 def get_tokenized_input(row, tokenizer, pert=0):
     """
-    takes a row of a df and constructs a tokenized (by BERT's tokenizer)
+    takes a row of a dataframe and constructs a tokenized (by BERT's tokenizer)
     """
     #"to" ID in bert-large-cased = 1106
     #[UNK] ID = 100
