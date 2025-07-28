@@ -1,9 +1,5 @@
 pandas
 plotnine
-json
-re
 torch
 numpy
-sklearn
-argparse
-random
+scikit-learn
